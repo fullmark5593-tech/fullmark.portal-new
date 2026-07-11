@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>استيراد بيانات Full Mark القديمة إلى Firestore</title>
+<style>
+  body { font-family: Tahoma, Arial, sans-serif; background:#f4f6f9; padding:40px; text-align:center; }
+  .box { max-width:520px; margin:0 auto; background:#fff; border-radius:12px; padding:30px; box-shadow:0 4px 14px rgba(0,0,0,.08); }
+  button { background:#16a34a; color:#fff; border:none; padding:14px 28px; border-radius:8px; font-size:16px; cursor:pointer; margin-top:16px; }
+  button:hover { background:#15803d; }
+  button:disabled { background:#9ca3af; cursor:not-allowed; }
+  input[type=file] { margin-top:16px; }
+  #status { margin-top:16px; font-weight:bold; white-space:pre-line; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <h2>📥 استيراد البيانات القديمة إلى Firestore</h2>
+    <p>افتح هذه الصفحة <strong>مرة واحدة فقط</strong> بعد ملء إعدادات Firebase في <code>firebase-config.js</code>، ثم اختر ملف النسخة الاحتياطية (JSON) اللي نزّلته من صفحة التصدير.</p>
+    <input type="file" id="fileInput" accept="application/json" />
+    <br>
+    <button id="importBtn" onclick="startImport()" disabled>⬆️ رفع البيانات إلى Firestore</button>
+    <p id="status"></p>
+  </div>
+
+<script type="module">
+  import { db } from './firebase-config.js';
+  import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const fileInput = document.getElementById('fileInput');
+  const importBtn = document.getElementById('importBtn');
+  const status = document.getElementById('status');
+  let parsedData = null;
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      parsedData = JSON.parse(text);
+      status.textContent = `تم قراءة ${parsedData.length} سجل من الملف. اضغط الزر للرفع.`;
+      importBtn.disabled = false;
+    } catch (err) {
+      status.textContent = '❌ الملف غير صالح، تأكد أنه ملف JSON صحيح.';
+      importBtn.disabled = true;
+    }
+  });
+
+  window.startImport = async function startImport() {
+    if (!parsedData || !parsedData.length) return;
+    importBtn.disabled = true;
+    let done = 0;
+    let failed = 0;
+
+    for (const record of parsedData) {
+      try {
+        const id = record.id || `rec-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+        await setDoc(doc(db, 'registrations', id), { ...record, id });
+        done += 1;
+      } catch (err) {
+        failed += 1;
+        console.error('فشل رفع سجل:', record, err);
+      }
+      status.textContent = `جاري الرفع... (${done + failed} / ${parsedData.length})`;
+    }
+
+    status.textContent = `✅ اكتمل الاستيراد.\nتم رفع ${done} سجل بنجاح.${failed ? `\n⚠️ فشل رفع ${failed} سجل (راجع الـ Console).` : ''}`;
+  };
+</script>
+</body>
+</html>
